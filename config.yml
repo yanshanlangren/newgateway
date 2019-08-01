@@ -1,0 +1,7 @@
+server:
+  network: tcp
+  port: 8000
+  ticker-interval: 10
+kafka:
+  server-list:
+    - localhost:9092
