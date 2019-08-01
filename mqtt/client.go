@@ -9,7 +9,6 @@ import (
 	"newgateway/kafka"
 	"newgateway/logger"
 	"newgateway/model"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -135,10 +134,10 @@ func (c *Client) Subscribe(s *kafka.Subscriber, msg *model.MQTTMessage) {
 							Qos:    msg.Payload.SubscribeAckQos,
 							Retain: 0,
 						},
-						RemainingLength: 2 + len(msg.Payload.SubscribePayload) + len(arr),
+						RemainingLength: 2 + len(s.Topic) + len(arr),
 					},
 					VariableHeader: &model.VariableHeader{
-						TopicName: msg.Payload.SubscribePayload,
+						TopicName: s.Topic,
 						MessageId: count,
 					},
 					Payload: &model.Payload{
@@ -146,7 +145,7 @@ func (c *Client) Subscribe(s *kafka.Subscriber, msg *model.MQTTMessage) {
 					},
 				}
 				if msg.Payload.SubscribeAckQos > 0 {
-					pub.FixedHeader.RemainingLength = 4 + len(msg.Payload.SubscribePayload) + len(arr)
+					pub.FixedHeader.RemainingLength = 4 + len(s.Topic) + len(arr)
 				}
 				count++
 				go c.Write(pub)
@@ -265,14 +264,12 @@ func (cli *Client) dealPublish(msg *model.MQTTMessage) *model.MQTTMessage {
 //Subscribe
 func (cli *Client) dealSubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	//订阅
-	s, err := kafka.NewSubscribers(msg.Payload.SubscribePayload, 200)
+	s, err := kafka.NewSubscriber(msg.Payload.SubscribePayload, 200)
 	if err != nil {
 		logger.Fatal(err.Error())
 		return &model.MQTTMessage{}
 	}
-	for _, sub := range (s) {
-		go cli.Subscribe(sub, msg)
-	}
+	go cli.Subscribe(s, msg)
 
 	//产生SUBACK消息
 	return &model.MQTTMessage{
@@ -289,13 +286,8 @@ func (cli *Client) dealSubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 //Unsubscribe
 func (cli *Client) dealUnsubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	//删除订阅
-	for _, topic := range (strings.Split(msg.Payload.UnsubscribeTopics, ",")) {
-		cli.SubscribeMap.Range(func(key, val interface{}) bool {
-			if match, err := regexp.Match(topic, []byte(key.(string))); err == nil && match {
-				cli.Unsubscribe(key.(string))
-			}
-			return true
-		})
+	for _, v := range (strings.Split(msg.Payload.UnsubscribeTopics, ",")) {
+		cli.Unsubscribe(v)
 	}
 	//产生UNSUBACK消息
 	res := &model.MQTTMessage{
