@@ -33,6 +33,8 @@ type Client struct {
 	Closed bool
 	//关闭Assure的信号
 	AssureClosing chan bool
+	//kafka消费
+	Consumer *kafka.Consumer
 }
 
 // 关闭客户端连接
@@ -48,6 +50,9 @@ func (c *Client) Close() error {
 	//关闭Assure
 	c.AssureClosing <- true
 	c.Conn.Close()
+	if c.Consumer != nil {
+		c.Consumer.Release()
+	}
 	c.Closed = true
 	return nil
 }
@@ -153,36 +158,6 @@ func (c *Client) Subscribe(s *kafka.Subscriber, msg *model.MQTTMessage) {
 			}
 		}(pc)
 	}
-
-	//count := 0
-	//for {
-	//	arr, ok := <-s.Ch
-	//	if !ok {
-	//		return
-	//	}
-	//	pub := &model.MQTTMessage{
-	//		FixedHeader: &model.FixedHeader{
-	//			PackageType: constant.MQTT_MSG_TYPE_PUBLISH,
-	//			SpecificToken: &model.SpecificToken{
-	//				DUP:    0,
-	//				Qos:    msg.Payload.SubscribeAckQos,
-	//				Retain: 0,
-	//			},
-	//			RemainingLength: 2 + len(s.Topic) + len(arr),
-	//		},
-	//		VariableHeader: &model.VariableHeader{
-	//			TopicName: s.Topic,
-	//			MessageId: count,
-	//		},
-	//		Payload: &model.Payload{
-	//			Data: string(arr),
-	//		},
-	//	}
-	//	if msg.Payload.SubscribeAckQos > 0 {
-	//		pub.FixedHeader.RemainingLength = 4 + len(s.Topic) + len(arr)
-	//	}
-	//	count++
-	//	go c.Write(pub)
 }
 
 //处理业务逻辑并返回
@@ -265,13 +240,29 @@ func (cli *Client) dealPublish(msg *model.MQTTMessage) *model.MQTTMessage {
 //Subscribe
 func (cli *Client) dealSubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	//订阅
-	s, err := kafka.NewSubscribers(msg.Payload.SubscribePayload, 200)
-	if err != nil {
-		logger.Fatal(err.Error())
-		return &model.MQTTMessage{}
+	if cli.Consumer == nil {
+		c := kafka.GetConsumer()
+		if c == nil {
+			return &model.MQTTMessage{}
+		}
+		cli.Consumer = c
 	}
-	for _, sub := range (s) {
-		go cli.Subscribe(sub, msg)
+	if strings.Index(msg.Payload.SubscribePayload, "*") != -1 {
+		s, err := cli.Consumer.NewSubscribers(msg.Payload.SubscribePayload, 200)
+		if err != nil {
+			logger.Fatal(err.Error())
+			return &model.MQTTMessage{}
+		}
+		for _, sub := range (s) {
+			go cli.Subscribe(sub, msg)
+		}
+	} else {
+		s, err := cli.Consumer.NewSubscriber(msg.Payload.SubscribePayload, 200)
+		if err != nil {
+			logger.Fatal(err.Error())
+			return &model.MQTTMessage{}
+		}
+		go cli.Subscribe(s, msg)
 	}
 
 	//产生SUBACK消息
@@ -286,7 +277,7 @@ func (cli *Client) dealSubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	}
 }
 
-//Unsubscribe
+//TODO Unsubscribe
 func (cli *Client) dealUnsubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	//删除订阅
 	for _, topic := range (strings.Split(msg.Payload.UnsubscribeTopics, ",")) {

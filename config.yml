@@ -2,6 +2,8 @@ server:
   network: tcp
   port: 8000
   ticker-interval: 10
+  connection-buffer-size: 200
 kafka:
   server-list:
     - localhost:9092
+  consumer-pool-size: 200

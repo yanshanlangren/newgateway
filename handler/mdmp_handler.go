@@ -5,6 +5,7 @@ import (
 	"context"
 	"net"
 	"newgateway/common"
+	"newgateway/config"
 	"newgateway/constant"
 	"newgateway/logger"
 	"newgateway/model"
@@ -76,7 +77,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		var (
 			buffer     [][]byte
 			count      = 0
-			bufferSize = 1000
+			bufferSize = config.GetConfig().Server.ConnectionBufferSize
 		)
 		for i := 0; i < bufferSize; i++ {
 			buffer = append(buffer, make([]byte, 16*1024))
@@ -116,6 +117,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 			}
 		}
 	}
+	client.Close()
 }
 
 //创建连接

@@ -44,15 +44,6 @@ func Publish(topic, value string) (int32, int64, error) {
 }
 
 func BatchPublish(msgs []*sarama.ProducerMessage) error {
-	//msgs := make([]*sarama.ProducerMessage, 0)
-	//for _, v := range (value) {
-	//	msgs = append(msgs, &sarama.ProducerMessage{
-	//		Topic:     topic,
-	//		Partition: int32(10),
-	//		Key:       sarama.StringEncoder("key"),
-	//		Value:     sarama.ByteEncoder(v),
-	//	})
-	//}
 	return (*kafkaProducer).SendMessages(msgs)
 }
 

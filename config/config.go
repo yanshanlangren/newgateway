@@ -8,12 +8,14 @@ import (
 
 type Config struct {
 	Server struct {
-		Port           string `yaml:"port"`
-		Network        string `yaml:"network"`
-		TickerInterval int    `yaml:"ticker-interval"`
+		Port                 string `yaml:"port"`
+		Network              string `yaml:"network"`
+		TickerInterval       int    `yaml:"ticker-interval"`
+		ConnectionBufferSize int    `yaml:"connection-buffer-size"`
 	}
 	Kafka struct {
-		ServerList []string `yaml:"server-list"`
+		ServerList       []string `yaml:"server-list"`
+		ConsumerPoolSize int      `yaml:"consumer-pool-size"`
 	}
 }
 
