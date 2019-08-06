@@ -27,7 +27,6 @@ func initProducer() *sarama.SyncProducer {
 	producer, err := sarama.NewSyncProducer(config.GetConfig().Kafka.ServerList, cfg)
 	if err != nil {
 		logger.Fatal(err.Error())
-		panic(err)
 	}
 	return &producer
 }

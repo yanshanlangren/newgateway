@@ -17,6 +17,14 @@ type Config struct {
 		ServerList       []string `yaml:"server-list"`
 		ConsumerPoolSize int      `yaml:"consumer-pool-size"`
 	}
+	Log struct {
+		File struct {
+			Path       string `yaml:"path"`
+			MaxHour    int64  `yaml:"max_hour"`
+			RotateHour int64  `yaml:"rotate_hour"`
+		}
+		Level string `yaml:"level"`
+	}
 }
 
 var config *Config

@@ -2,8 +2,14 @@ server:
   network: tcp
   port: 8000
   ticker-interval: 10
-  connection-buffer-size: 200
+  connection-buffer-size: 0
 kafka:
   server-list:
     - localhost:9092
-  consumer-pool-size: 200
+  consumer-pool-size: 0
+log:
+  file:
+    path: E:\\log
+    max_hour: 24
+    rotate_hour: 24
+  level: DEBUG

@@ -9,6 +9,7 @@ import (
 	"newgateway/logger"
 	"newgateway/model"
 	"newgateway/mqtt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -59,49 +60,36 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 	connBuffer := make([]byte, 16*1024)
 	connLen, err := reader.Read(connBuffer)
 	if err != nil {
-		logger.Fatal(err.Error())
+		logger.Error(err.Error())
 		return
 	}
 	msgByteArr := connBuffer[:connLen]
 	connMsgArr, err1 := mqtt.ParseMQTTMessage(msgByteArr)
 	if err1 != nil {
-		logger.Fatal(err1.Error())
+		logger.Error(err1.Error())
 		return
 	}
 	connMsg := connMsgArr[0]
-	//logger.Info("accept type:" + strconv.Itoa(connMsg.FixedHeader.PackageType) + " \r\naccept message:" + string(msgByteArr))
+	logger.Debug("accept type: " + strconv.Itoa(connMsg.FixedHeader.PackageType) + " \r\naccept message:" + string(msgByteArr))
 
 	//dealConnect
 	if connMsg.FixedHeader.PackageType == constant.MQTT_MSG_TYPE_CONNECT && h.dealConnect(connMsg, client) {
-		//var (
-		//	buffer     [][]byte
-		//	count      = 0
-		//	bufferSize = config.GetConfig().Server.ConnectionBufferSize
-		//)
-		//for i := 0; i < bufferSize; i++ {
-		//	buffer = append(buffer, make([]byte, 16*1024))
-		//}
 		for {
 			x := make(chan bool)
 			//监听超时, 异步读取数据
-			//go func(num int) {
 			go func() {
 				buff := make([]byte, 16*1024)
-				//n, err := reader.Read(buffer[num])
 				n, err := reader.Read(buff)
 				if err != nil {
-					logger.Fatal(err.Error())
+					logger.Error(err.Error())
 					client.Closing <- true
 					return
 				}
-				//go client.Deal(buffer[num][:n])
 				go client.Deal(buff[:n])
 				x <- true
-				//}(count % bufferSize)
 			}()
 			select {
 			case <-x: //正常收取消息
-				//count++
 				continue
 			case <-time.After(time.Duration(3*connMsg.VariableHeader.KeepAliveTimer/2) * time.Second): //超时
 				logger.Info("connection time out")

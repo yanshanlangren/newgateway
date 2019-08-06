@@ -25,16 +25,14 @@ func ParseMQTTMessage(byteArr []byte) ([]*model.MQTTMessage, error) {
 		msg.FixedHeader = fixedHeader
 
 		//解析可变头
-		//msgType := fixedHeader.PackageType
 		variableHeader, x, err := parseVariableHeader(byteArr[offset+2:], msg)
 		if err != nil {
-			logger.Fatal(err.Error())
+			logger.Error(err.Error())
 			return nil, err
 		}
 		msg.VariableHeader = variableHeader
 
 		//解析消息体
-		//fmt.Println("len=" + strconv.Itoa(len(byteArr)) + ", x=" + strconv.Itoa(x) + ", remain=" + strconv.Itoa(msg.FixedHeader.RemainingLength))
 		payload, err := parsePayload(byteArr[2+x+offset:offset+msg.FixedHeader.RemainingLength+2], msg)
 		if err != nil {
 			return nil, err
@@ -192,7 +190,7 @@ func parseConnectPayload(body []byte, msg *model.MQTTMessage) (*model.Payload, e
 		topicLen := int(body[offset])
 		offset++
 		payload.WillTopic = string(body[offset : offset+topicLen])
-		//logger.Info("will topic:" + string(body[offset:offset+topicLen]))
+		logger.Debug("will topic:" + string(body[offset:offset+topicLen]))
 		offset += topicLen
 		offset++
 
@@ -200,7 +198,7 @@ func parseConnectPayload(body []byte, msg *model.MQTTMessage) (*model.Payload, e
 		messageLen := int(body[offset])
 		offset++
 		payload.WillMessage = string(body[offset : offset+messageLen])
-		//logger.Info("will message:" + string(body[offset:offset+messageLen]))
+		logger.Debug("will message:" + string(body[offset:offset+messageLen]))
 		offset += messageLen
 		offset++
 	}
@@ -209,7 +207,7 @@ func parseConnectPayload(body []byte, msg *model.MQTTMessage) (*model.Payload, e
 		userLen := int(body[offset])
 		offset++
 		payload.UserName = string(body[offset : offset+userLen])
-		//logger.Info("username:" + string(body[offset:offset+userLen]))
+		logger.Debug("username:" + string(body[offset:offset+userLen]))
 		offset += userLen
 		offset++
 	}
@@ -218,7 +216,7 @@ func parseConnectPayload(body []byte, msg *model.MQTTMessage) (*model.Payload, e
 		passLen := int(body[offset])
 		offset++
 		payload.Password = string(body[offset : offset+passLen])
-		//logger.Info("password:" + string(body[offset:offset+passLen]))
+		logger.Debug("password:" + string(body[offset:offset+passLen]))
 		offset += passLen
 		offset++
 	}

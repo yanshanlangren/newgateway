@@ -22,7 +22,7 @@ func ListenAndServe(address string, handler handler.Handler) {
 	// 绑定监听地址
 	listener, err := net.Listen(config.GetConfig().Server.Network, address)
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("listen err: %v", err))
+		logger.Error(fmt.Sprintf("listen err: %v", err))
 	}
 
 	// 监听中断信号
@@ -51,7 +51,7 @@ func ListenAndServe(address string, handler handler.Handler) {
 		conn, err := listener.Accept()
 		if err != nil {
 			// 通常是由于listener被关闭无法继续监听导致的错误
-			logger.Fatal(fmt.Sprintf("accept err: %v", err))
+			logger.Error(fmt.Sprintf("accept err: %v", err))
 		}
 		// 开启新的 goroutine 处理该连接
 		logger.Info("accept link")

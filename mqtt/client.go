@@ -10,6 +10,7 @@ import (
 	"newgateway/logger"
 	"newgateway/model"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -59,18 +60,17 @@ func (c *Client) Close() error {
 
 //处理字节数组
 func (c *Client) Deal(arr []byte) {
-	//logger.Info("message body:" + string(arr))
 	reqArr, err1 := ParseMQTTMessage(arr)
 	if err1 != nil {
-		logger.Fatal(err1.Error())
+		logger.Error(err1.Error())
 		return
 	}
 	for _, reqMsg := range (reqArr) {
-		//logger.Info("message type:" + strconv.Itoa(reqMsg.FixedHeader.PackageType))
+		logger.Debug("message type: " + strconv.Itoa(reqMsg.FixedHeader.PackageType))
 		//处理消息业务逻辑
 		resMsg, err2 := c.DealMQTTMessage(reqMsg)
 		if err2 != nil {
-			logger.Fatal(err2.Error())
+			logger.Error(err2.Error())
 			return
 		}
 		go c.Write(resMsg)
@@ -80,11 +80,11 @@ func (c *Client) Deal(arr []byte) {
 func (c *Client) Write(msg *model.MQTTMessage) {
 	resByte, err3 := MQTT2ByteArr(msg)
 	if err3 != nil {
-		logger.Fatal(err3.Error())
+		logger.Error(err3.Error())
 		return
 	}
 	if resByte != nil && len(resByte) > 0 {
-		//logger.Info("return type: " + strconv.Itoa(msg.FixedHeader.PackageType) + "\r\nreturn message: " + string(resByte))
+		logger.Debug("return type: " + strconv.Itoa(msg.FixedHeader.PackageType) + "\r\nreturn message: " + string(resByte))
 		// 发送数据前先置为waiting状态
 		c.Waiting.Add(1)
 		//写返回
@@ -250,7 +250,7 @@ func (cli *Client) dealSubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	if strings.Index(msg.Payload.SubscribePayload, "*") != -1 {
 		s, err := cli.Consumer.NewSubscribers(msg.Payload.SubscribePayload, 200)
 		if err != nil {
-			logger.Fatal(err.Error())
+			logger.Error(err.Error())
 			return &model.MQTTMessage{}
 		}
 		for _, sub := range (s) {
@@ -259,7 +259,7 @@ func (cli *Client) dealSubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	} else {
 		s, err := cli.Consumer.NewSubscriber(msg.Payload.SubscribePayload, 200)
 		if err != nil {
-			logger.Fatal(err.Error())
+			logger.Error(err.Error())
 			return &model.MQTTMessage{}
 		}
 		go cli.Subscribe(s, msg)
