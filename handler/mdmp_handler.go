@@ -65,8 +65,8 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 	}
 	msgByteArr := connBuffer[:connLen]
 	connMsgArr, err1 := mqtt.ParseMQTTMessage(msgByteArr)
-	if err1 != nil {
-		logger.Error(err1.Error())
+	if err1 != nil || connMsgArr == nil {
+		logger.Error("error parsing connection string:"+ string(msgByteArr))
 		return
 	}
 	connMsg := connMsgArr[0]
