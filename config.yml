@@ -12,4 +12,4 @@ log:
     path: E:\\log
     max_hour: 24
     rotate_hour: 24
-  level: DEBUG
+  level: WARN
