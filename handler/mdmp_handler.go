@@ -66,7 +66,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 	msgByteArr := connBuffer[:connLen]
 	connMsgArr, err1 := mqtt.ParseMQTTMessage(msgByteArr)
 	if err1 != nil || connMsgArr == nil {
-		logger.Error("error parsing connection string:"+ string(msgByteArr))
+		logger.Error("error parsing connection string:" + string(msgByteArr))
 		return
 	}
 	connMsg := connMsgArr[0]
@@ -78,7 +78,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 			x := make(chan bool)
 			//监听超时, 异步读取数据
 			go func() {
-				buff := make([]byte, 16*1024)
+				buff := make([]byte, 32*1024)
 				n, err := reader.Read(buff)
 				if err != nil {
 					logger.Error(err.Error())
