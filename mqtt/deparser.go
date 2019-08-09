@@ -1,23 +1,19 @@
 package mqtt
 
 import (
-	"errors"
 	"newgateway/constant"
 	"newgateway/model"
 )
 
-func MQTT2ByteArr(msg *model.MQTTMessage) ([]byte, error) {
+func MQTT2ByteArr(msg *model.MQTTMessage) []byte {
 	arr := make([]byte, 0)
-	if msg == nil {
-		return arr, errors.New("MQTT message empty")
-	}
 	//固定头
 	arr = appendFixedHeader(msg, arr)
 	//可变头
 	arr = appendVariableHeader(msg, arr)
 	//payload
 	arr = appendPayload(msg, arr)
-	return arr, nil
+	return arr
 }
 
 //创建固定头
@@ -47,7 +43,7 @@ func appendVariableHeader(msg *model.MQTTMessage, arr []byte) []byte {
 				arr = append(arr, byte(msgInt>>8))
 				arr = append(arr, byte(msgInt))
 			}
-		case constant.MQTT_MSG_TYPE_PUBACK, constant.MQTT_MSG_TYPE_PUBREC, constant.MQTT_MSG_TYPE_PUBREL, constant.MQTT_MSG_TYPE_SUBACK, constant.MQTT_MSG_TYPE_UNSUBACK:
+		case constant.MQTT_MSG_TYPE_PUBACK, constant.MQTT_MSG_TYPE_PUBREC, constant.MQTT_MSG_TYPE_PUBREL, constant.MQTT_MSG_TYPE_SUBACK, constant.MQTT_MSG_TYPE_UNSUBACK, constant.MQTT_MSG_TYPE_PUBCOMP:
 			msgInt := int(msg.VariableHeader.MessageId)
 			arr = append(arr, byte(msgInt>>8))
 			arr = append(arr, byte(msgInt))

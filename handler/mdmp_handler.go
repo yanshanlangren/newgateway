@@ -3,6 +3,7 @@ package handler
 import (
 	"bufio"
 	"context"
+	"io"
 	"net"
 	"newgateway/common"
 	"newgateway/config"
@@ -71,11 +72,11 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 	msgByteArr := connBuffer[:connLen]
 	connMsgArr := mqtt.ParseMQTTMessage(msgByteArr)
 	if connMsgArr == nil {
-		logger.Error("error parsing connection string:" + string(msgByteArr))
+		logger.Error("error parsing connection string: ", msgByteArr)
 		return
 	}
 	connMsg := connMsgArr[0]
-	logger.Debug("accept type: " + strconv.Itoa(connMsg.FixedHeader.PackageType) + " accept message:" + string(msgByteArr))
+	logger.Debug("accept type: ", strconv.Itoa(connMsg.FixedHeader.PackageType), " accept message: ", msgByteArr)
 
 	//dealConnect
 	if connMsg.FixedHeader.PackageType == constant.MQTT_MSG_TYPE_CONNECT && h.dealConnect(connMsg, client) {
@@ -86,7 +87,12 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 				buff := make([]byte, size*1024)
 				n, err := reader.Read(buff)
 				if err != nil {
-					logger.Error(err.Error())
+					if err == io.EOF {
+						logger.Info("connection closed by client")
+					} else {
+						client.Will(connMsg)
+						logger.Error(err.Error())
+					}
 					client.Closing <- true
 					return
 				}
@@ -97,7 +103,8 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 			case <-x: //正常收取消息
 				continue
 			case <-time.After(time.Duration(3*connMsg.VariableHeader.KeepAliveTimer/2) * time.Second): //超时
-				logger.Info("connection time out")
+				logger.Warn("connection time out")
+				client.Will(connMsg)
 				h.activeConn.Delete(client)
 				client.Close()
 				return

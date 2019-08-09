@@ -65,6 +65,8 @@ func parseVariableHeader(body []byte, msg *model.MQTTMessage) (*model.VariableHe
 		header, offset = parseConnectVariableHeader(body)
 	case constant.MQTT_MSG_TYPE_PUBLISH: //publish
 		header, offset = parsePublishVariableHeader(body, msg)
+	case constant.MQTT_MSG_TYPE_PUBREL: //pubrel
+		header, offset = parsePubrelVariableHeader(body)
 	case constant.MQTT_MSG_TYPE_SUBSCRIBE: //subscribe
 		header, offset = parseSubscribeVariableHeader(body)
 	case constant.MQTT_MSG_TYPE_UNSUBSCRIBE: //unsubscribe
@@ -99,6 +101,13 @@ func parsePublishVariableHeader(body []byte, msg *model.MQTTMessage) (*model.Var
 		offset += 2
 	}
 	return header, offset
+}
+
+//处理subscribe消息的可变头
+func parsePubrelVariableHeader(body []byte) (*model.VariableHeader, int) {
+	header := &model.VariableHeader{}
+	header.MessageId = int(body[0])<<8 + int(body[1])
+	return header, 2
 }
 
 //处理subscribe消息的可变头
