@@ -8,10 +8,10 @@ import (
 
 type Config struct {
 	Server struct {
-		Port                 string `yaml:"port"`
-		Network              string `yaml:"network"`
-		TickerInterval       int    `yaml:"ticker-interval"`
-		ConnectionBufferSize int    `yaml:"connection-buffer-size"`
+		Port           string `yaml:"port"`
+		Network        string `yaml:"network"`
+		TickerInterval int    `yaml:"ticker-interval"`
+		BufferSize     int    `yaml:"buffer-size"`
 	}
 	Kafka struct {
 		ServerList       []string `yaml:"server-list"`

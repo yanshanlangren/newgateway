@@ -5,6 +5,7 @@ import (
 	"context"
 	"net"
 	"newgateway/common"
+	"newgateway/config"
 	"newgateway/constant"
 	"newgateway/logger"
 	"newgateway/model"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"time"
 )
+
+var bufferSize = config.GetConfig().Server.BufferSize
 
 type MDMPHandler struct {
 	//用于保存所有有效的连接
@@ -40,7 +43,9 @@ func (h *MDMPHandler) Close() error {
 func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 	//如果handler正在关闭, 则关闭当前连接
 	if h.closing.Get() {
-		conn.Close()
+		if conn != nil {
+			conn.Close()
+		}
 		return
 	}
 
@@ -48,7 +53,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		Conn:          conn,
 		Assure:        sync.Map{},
 		SubscribeMap:  sync.Map{},
-		Ticker:        10,
+		Ticker:        config.GetConfig().Server.TickerInterval,
 		Closing:       make(chan bool),
 		Closed:        false,
 		AssureClosing: make(chan bool),
@@ -64,21 +69,21 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		return
 	}
 	msgByteArr := connBuffer[:connLen]
-	connMsgArr, err1 := mqtt.ParseMQTTMessage(msgByteArr)
-	if err1 != nil || connMsgArr == nil {
+	connMsgArr := mqtt.ParseMQTTMessage(msgByteArr)
+	if connMsgArr == nil {
 		logger.Error("error parsing connection string:" + string(msgByteArr))
 		return
 	}
 	connMsg := connMsgArr[0]
-	logger.Debug("accept type: " + strconv.Itoa(connMsg.FixedHeader.PackageType) + " \r\naccept message:" + string(msgByteArr))
+	logger.Debug("accept type: " + strconv.Itoa(connMsg.FixedHeader.PackageType) + " accept message:" + string(msgByteArr))
 
 	//dealConnect
 	if connMsg.FixedHeader.PackageType == constant.MQTT_MSG_TYPE_CONNECT && h.dealConnect(connMsg, client) {
+		x := make(chan bool)
 		for {
-			x := make(chan bool)
 			//监听超时, 异步读取数据
-			go func() {
-				buff := make([]byte, 32*1024)
+			go func(size int) {
+				buff := make([]byte, size*1024)
 				n, err := reader.Read(buff)
 				if err != nil {
 					logger.Error(err.Error())
@@ -87,7 +92,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 				}
 				go client.Deal(buff[:n])
 				x <- true
-			}()
+			}(bufferSize)
 			select {
 			case <-x: //正常收取消息
 				continue

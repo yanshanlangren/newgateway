@@ -3,8 +3,10 @@ package kafka
 import (
 	"github.com/Shopify/sarama"
 	"newgateway/config"
+	"newgateway/logger"
 	"regexp"
 	"sync"
+	"time"
 )
 
 var consumerPool *ConsumerPool
@@ -104,33 +106,43 @@ func (c *Consumer) NewSubscribers(tpc string, consumerBufferSize int) ([]*Subscr
 	if err != nil {
 		return nil, err
 	}
+	wg := sync.WaitGroup{}
 	for _, topic := range (topicList) {
 		if match, err := regexp.Match(tpc, []byte(topic)); err == nil && match {
-
-			partitionList, err := (*c.consumer).Partitions(topic)
-			if err != nil {
-				return nil, err
-			}
-			sub := &Subscriber{
-				Topic:    topic,
-				Consumer: c,
-				PcList:   make([]sarama.PartitionConsumer, 0),
-			}
-
-			for partition := range partitionList {
-				//ConsumePartition方法根据主题，分区和给定的偏移量创建创建了相应的分区消费者
-				//如果该分区消费者已经消费了该信息将会返回error
-				//sarama.OffsetNewest:表明了为最新消息
-				pc, err := (*c.consumer).ConsumePartition(topic, int32(partition), sarama.OffsetNewest)
+			wg.Add(1)
+			go func(tpc string) {
+				defer wg.Done()
+				logger.Debug(time.Now(),"start subscribing topic[" + tpc + "]")
+				partitionList, err := (*c.consumer).Partitions(tpc)
 				if err != nil {
-					return nil, err
+					logger.Error(err)
+					return
 				}
+				sub := &Subscriber{
+					Topic:    tpc,
+					Consumer: c,
+					PcList:   make([]sarama.PartitionConsumer, 0),
+				}
+				for partition := range partitionList {
+					//ConsumePartition方法根据主题，分区和给定的偏移量创建创建了相应的分区消费者
+					//如果该分区消费者已经消费了该信息将会返回error
+					//sarama.OffsetNewest:表明了为最新消息
+					pc, err := (*c.consumer).ConsumePartition(tpc, int32(partition), sarama.OffsetNewest)
+					if err != nil {
+						logger.Error(err)
+						return
+					}
 
-				//添加到列表中
-				sub.PcList = append(sub.PcList, pc)
-			}
-			subs = append(subs, sub)
+					//添加到列表中
+					sub.PcList = append(sub.PcList, pc)
+					logger.Debug(time.Now(),"finished subscribing topic[" + tpc + "]")
+				}
+				subs = append(subs, sub)
+			}(topic)
 		}
 	}
+	logger.Debug(time.Now(),"wait group waiting")
+	wg.Wait()
+	logger.Debug(time.Now(),"wait group finished")
 	return subs, nil
 }

@@ -1,7 +1,6 @@
 package mqtt
 
 import (
-	"errors"
 	"github.com/Shopify/sarama"
 	"net"
 	"newgateway/common"
@@ -45,7 +44,7 @@ func (c *Client) Close() error {
 	//关闭订阅组
 	c.SubscribeMap.Range(func(k, v interface{}) bool {
 		sub := v.(*kafka.Subscriber)
-		sub.Close()
+		go sub.Close()
 		return true
 	})
 	//关闭Assure
@@ -60,20 +59,16 @@ func (c *Client) Close() error {
 
 //处理字节数组
 func (c *Client) Deal(arr []byte) {
-	reqArr, err1 := ParseMQTTMessage(arr)
-	if err1 != nil {
-		logger.Error(err1.Error())
-		return
-	}
+	//解析MQTT消息
+	reqArr := ParseMQTTMessage(arr)
+	logger.Debug(time.Now().Nanosecond(), " message parsed")
 	for _, reqMsg := range (reqArr) {
 		logger.Debug("message type: " + strconv.Itoa(reqMsg.FixedHeader.PackageType))
 		//处理消息业务逻辑
-		resMsg, err2 := c.DealMQTTMessage(reqMsg)
-		if err2 != nil {
-			logger.Error(err2.Error())
-			return
+		if reqMsg.FixedHeader != nil {
+			resMsg := c.DealMQTTMessage(reqMsg)
+			go c.Write(resMsg)
 		}
-		go c.Write(resMsg)
 	}
 }
 
@@ -91,6 +86,7 @@ func (c *Client) Write(msg *model.MQTTMessage) {
 		c.Conn.Write(resByte)
 		// 发送完毕, 结束waiting
 		c.Waiting.Done()
+		logger.Debug(time.Now().Nanosecond(), " message written")
 	}
 }
 
@@ -101,8 +97,8 @@ func (c *Client) Tick() {
 		select {
 		case <-tick:
 			c.Assure.Range(func(key, value interface{}) bool {
-				msg := key.(*model.MQTTMessage)
-				c.Write(msg)
+				msg := value.(*model.MQTTMessage)
+				go c.Write(msg)
 				return true
 			})
 		case <-c.AssureClosing:
@@ -119,6 +115,7 @@ func (c *Client) Unsubscribe(topicName string) {
 	}
 	sub := val.(*kafka.Subscriber)
 	sub.Close()
+	logger.Debug(time.Now(), "unsubscribed topic["+topicName+"]")
 	c.SubscribeMap.Delete(topicName)
 }
 
@@ -161,11 +158,8 @@ func (c *Client) Subscribe(s *kafka.Subscriber, msg *model.MQTTMessage) {
 }
 
 //处理业务逻辑并返回
-func (cli *Client) DealMQTTMessage(msg *model.MQTTMessage) (*model.MQTTMessage, error) {
+func (cli *Client) DealMQTTMessage(msg *model.MQTTMessage) *model.MQTTMessage {
 	var retMsg *model.MQTTMessage
-	if msg.FixedHeader == nil {
-		return nil, errors.New("fixed header is null")
-	}
 	switch msg.FixedHeader.PackageType {
 	case constant.MQTT_MSG_TYPE_DISCONNECT: //disconnect
 		retMsg = cli.dealDisconnect(msg)
@@ -180,7 +174,7 @@ func (cli *Client) DealMQTTMessage(msg *model.MQTTMessage) (*model.MQTTMessage, 
 	case constant.MQTT_MSG_TYPE_PINGREQ: //pingreq
 		retMsg = cli.dealPing(msg)
 	}
-	return retMsg, nil
+	return retMsg
 }
 
 //Publish
@@ -221,7 +215,7 @@ func (cli *Client) dealPublish(msg *model.MQTTMessage) *model.MQTTMessage {
 				MessageId: msg.VariableHeader.MessageId,
 			},
 		}
-		cli.Assure.Store(pubrec, 1)
+		cli.Assure.Store(msg.VariableHeader.MessageId, pubrec)
 
 		//返回PUBACK消息
 		return &model.MQTTMessage{
@@ -277,13 +271,14 @@ func (cli *Client) dealSubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	}
 }
 
-//TODO Unsubscribe
+//Unsubscribe
 func (cli *Client) dealUnsubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	//删除订阅
 	for _, topic := range (strings.Split(msg.Payload.UnsubscribeTopics, ",")) {
 		cli.SubscribeMap.Range(func(key, val interface{}) bool {
 			if match, err := regexp.Match(topic, []byte(key.(string))); err == nil && match {
-				cli.Unsubscribe(key.(string))
+				logger.Debug(time.Now(), "unsubscribing topic["+key.(string)+"]")
+				go cli.Unsubscribe(key.(string))
 			}
 			return true
 		})
@@ -314,7 +309,8 @@ func (cli *Client) dealPing(msg *model.MQTTMessage) *model.MQTTMessage {
 
 //Pubrel publish端发过来的Pubrec消息的返回
 func (cli *Client) dealPubrel(msg *model.MQTTMessage) *model.MQTTMessage {
-	//TODO 处理Pubrel消息
+	//处理Pubrel消息
+	cli.Assure.Delete(msg.VariableHeader.MessageId)
 	//产生一条空消息
 	return &model.MQTTMessage{}
 }

@@ -6,16 +6,13 @@ import (
 	"newgateway/model"
 )
 
-func ParseMQTTMessage(byteArr []byte) ([]*model.MQTTMessage, error) {
+func ParseMQTTMessage(byteArr []byte) []*model.MQTTMessage {
 	msgArr := make([]*model.MQTTMessage, 0)
 
 	//捕获可能异常
 	defer func() {
 		if err := recover(); err != nil {
-			//if len(byteArr) < 16*1024 {
-			//	fmt.Println(string(byteArr))
 			logger.Error(err, byteArr)
-			//}
 		}
 	}()
 
@@ -25,16 +22,16 @@ func ParseMQTTMessage(byteArr []byte) ([]*model.MQTTMessage, error) {
 		msg.FixedHeader = parseFixedHeader(byteArr[offset : offset+2])
 
 		//解析可变头
-		variableHeader, x := parseVariableHeader(byteArr[offset+2:], msg)
+		variableHeader, varHeaderLen := parseVariableHeader(byteArr[offset+2:offset+2+msg.FixedHeader.RemainingLength], msg)
 		msg.VariableHeader = variableHeader
 
 		//解析消息体
-		msg.Payload = parsePayload(byteArr[2+x+offset:offset+msg.FixedHeader.RemainingLength+2], msg)
+		msg.Payload = parsePayload(byteArr[2+varHeaderLen+offset:offset+msg.FixedHeader.RemainingLength+2], msg)
 
 		msgArr = append(msgArr, msg)
 		offset += msg.FixedHeader.RemainingLength + 2
 	}
-	return msgArr, nil
+	return msgArr
 }
 
 //解析固定头

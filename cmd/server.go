@@ -37,6 +37,10 @@ func ListenAndServe(address string, handler handler.Handler) {
 			logger.Info("shuting down...")
 			// 设置标志位为关闭中, 使用原子操作保证线程可见性
 			closing = true
+
+			//关闭handler
+			handler.Close()
+
 			// listener 关闭后 listener.Accept() 会立即返回错误
 			listener.Close()
 		}
@@ -52,6 +56,7 @@ func ListenAndServe(address string, handler handler.Handler) {
 		if err != nil {
 			// 通常是由于listener被关闭无法继续监听导致的错误
 			logger.Error(fmt.Sprintf("accept err: %v", err))
+			return
 		}
 		// 开启新的 goroutine 处理该连接
 		logger.Info("accept link")
