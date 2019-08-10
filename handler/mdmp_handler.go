@@ -81,10 +81,10 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 	//dealConnect
 	if connMsg.FixedHeader.PackageType == constant.MQTT_MSG_TYPE_CONNECT && h.dealConnect(connMsg, client) {
 		x := make(chan bool)
+		buff := make([]byte, bufferSize*1024)
 		for {
 			//监听超时, 异步读取数据
-			go func(size int) {
-				buff := make([]byte, size*1024)
+			go func() {
 				n, err := reader.Read(buff)
 				if err != nil {
 					if err == io.EOF {
@@ -96,9 +96,11 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 					client.Closing <- true
 					return
 				}
-				go client.Deal(buff[:n])
+				arr := make([]byte, n)
+				copy(arr, buff[:n])
+				go client.Deal(arr)
 				x <- true
-			}(bufferSize)
+			}()
 			select {
 			case <-x: //正常收取消息
 				continue
