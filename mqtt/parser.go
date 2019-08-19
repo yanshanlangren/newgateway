@@ -6,17 +6,22 @@ import (
 	"newgateway/model"
 )
 
-func ParseMQTTMessage(byteArr []byte) []*model.MQTTMessage {
+var offset = 0
+
+var buffer = make([]byte, 1024*1024)
+var isBufferEmpty = true
+
+func ParseByteArray(byteArr []byte) []*model.MQTTMessage {
 	msgArr := make([]*model.MQTTMessage, 0)
 
 	//捕获可能异常
 	defer func() {
 		if err := recover(); err != nil {
-			logger.Error(err, byteArr)
+			logger.Error(err, len(byteArr), byteArr)
 		}
 	}()
 
-	for offset := 0; offset < len(byteArr)-2; {
+	for offset = 0; offset < len(byteArr); {
 		msg := &model.MQTTMessage{}
 		//解析固定头
 		msg.FixedHeader = parseFixedHeader(byteArr[offset : offset+2])

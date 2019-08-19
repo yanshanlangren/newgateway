@@ -59,36 +59,40 @@ func (c *Client) Close() error {
 
 func (c *Client) Will(conn *model.MQTTMessage) {
 	if conn.VariableHeader.ConnectFlags.WillFlag == 1 {
-		kafka.Publish(conn.Payload.WillTopic,conn.Payload.WillMessage)
+		kafka.Publish(conn.Payload.WillTopic, conn.Payload.WillMessage)
 	}
 }
 
 //处理字节数组
 func (c *Client) Deal(arr []byte) {
 	//解析MQTT消息
-	reqArr := ParseMQTTMessage(arr)
+	reqArr := c.Parse(arr)
 	for _, reqMsg := range (reqArr) {
 		logger.Debug("message type: "+strconv.Itoa(reqMsg.FixedHeader.PackageType), " message body", arr)
 		//处理消息业务逻辑
 		if reqMsg.FixedHeader != nil {
 			resMsg := c.DealMQTTMessage(reqMsg)
-			go c.Write(resMsg)
+			if resMsg != nil {
+				go c.Write(resMsg)
+			}
 		}
 	}
 }
 
+func (c *Client) Parse(arr []byte) []*model.MQTTMessage {
+	return ParseByteArray(arr)
+}
+
 func (c *Client) Write(msg *model.MQTTMessage) {
-	if msg != nil {
-		resByte := MQTT2ByteArr(msg)
-		if resByte != nil && len(resByte) > 0 {
-			logger.Debug("return type: ", strconv.Itoa(msg.FixedHeader.PackageType), " return message: ", resByte)
-			// 发送数据前先置为waiting状态
-			c.Waiting.Add(1)
-			//写返回
-			c.Conn.Write(resByte)
-			// 发送完毕, 结束waiting
-			c.Waiting.Done()
-		}
+	resByte := MQTT2ByteArr(msg)
+	if resByte != nil && len(resByte) > 0 {
+		logger.Debug("return type: ", strconv.Itoa(msg.FixedHeader.PackageType), " return message: ", resByte)
+		// 发送数据前先置为waiting状态
+		c.Waiting.Add(1)
+		//写返回
+		c.Conn.Write(resByte)
+		// 发送完毕, 结束waiting
+		c.Waiting.Done()
 	}
 }
 
@@ -182,11 +186,14 @@ func (cli *Client) DealMQTTMessage(msg *model.MQTTMessage) *model.MQTTMessage {
 //Publish
 func (cli *Client) dealPublish(msg *model.MQTTMessage) *model.MQTTMessage {
 	//发布消息
-	go kafka.AsyncPublish(msg.VariableHeader.TopicName, msg.Payload.Data)
-
 	//产生返回值
 	switch msg.FixedHeader.SpecificToken.Qos {
 	case 1:
+		_, _, err := kafka.Publish(msg.VariableHeader.TopicName, msg.Payload.Data)
+		if err != nil {
+			//TODO
+			return nil
+		}
 		//返回PUBACK消息
 		return &model.MQTTMessage{
 			FixedHeader: &model.FixedHeader{
@@ -198,6 +205,11 @@ func (cli *Client) dealPublish(msg *model.MQTTMessage) *model.MQTTMessage {
 			},
 		}
 	case 2:
+		_, _, err := kafka.Publish(msg.VariableHeader.TopicName, msg.Payload.Data)
+		if err != nil {
+			//TODO
+			return nil
+		}
 		//生产一条PUBREC消息, 发送给消息发送方, 并期待接收到PUBREL消息
 		pubrec := &model.MQTTMessage{
 			FixedHeader: &model.FixedHeader{
@@ -211,7 +223,8 @@ func (cli *Client) dealPublish(msg *model.MQTTMessage) *model.MQTTMessage {
 		cli.Assure.Store(msg.VariableHeader.MessageId, pubrec)
 		return pubrec
 	default:
-		return &model.MQTTMessage{}
+		go kafka.AsyncPublish(msg.VariableHeader.TopicName, msg.Payload.Data)
+		return nil
 	}
 }
 
@@ -312,5 +325,5 @@ func (cli *Client) dealDisconnect(msg *model.MQTTMessage) *model.MQTTMessage {
 	//断开连接
 	cli.Closing <- true
 	//产生一条空消息
-	return &model.MQTTMessage{}
+	return nil
 }

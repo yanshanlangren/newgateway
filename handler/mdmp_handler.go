@@ -69,14 +69,14 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		logger.Error(err.Error())
 		return
 	}
-	msgByteArr := connBuffer[:connLen]
-	connMsgArr := mqtt.ParseMQTTMessage(msgByteArr)
+	connByteArr := connBuffer[:connLen]
+	connMsgArr := mqtt.ParseByteArray(connByteArr)
 	if connMsgArr == nil {
-		logger.Error("error parsing connection string: ", msgByteArr)
+		logger.Error("error parsing connection string: ", connByteArr)
 		return
 	}
 	connMsg := connMsgArr[0]
-	logger.Debug("accept type: ", strconv.Itoa(connMsg.FixedHeader.PackageType), " accept message: ", msgByteArr)
+	logger.Debug("accept type: ", strconv.Itoa(connMsg.FixedHeader.PackageType), " accept message: ", connByteArr)
 
 	//dealConnect
 	if connMsg.FixedHeader.PackageType == constant.MQTT_MSG_TYPE_CONNECT && h.dealConnect(connMsg, client) {
@@ -84,8 +84,18 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		buff := make([]byte, bufferSize*1024)
 		for {
 			//监听超时, 异步读取数据
+			var (
+				n   = 0
+				err error
+			)
 			go func() {
-				n, err := reader.Read(buff)
+				n, err = reader.Read(buff)
+				logger.Debug("received bytes of ", n, " ", buff[:n], err)
+				if n > 0 {
+					client.Deal(buff[:n])
+					x <- true
+					return
+				}
 				if err != nil {
 					if err == io.EOF {
 						logger.Info("connection closed by client")
@@ -96,10 +106,6 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 					client.Closing <- true
 					return
 				}
-				arr := make([]byte, n)
-				copy(arr, buff[:n])
-				go client.Deal(arr)
-				x <- true
 			}()
 			select {
 			case <-x: //正常收取消息

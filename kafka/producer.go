@@ -69,7 +69,28 @@ func BatchPublish(msgs []*sarama.ProducerMessage) error {
 	return (*kafkaProducer).SendMessages(msgs)
 }
 
-var buffer = make(map[string][]*sarama.ProducerMessage)
+var lock = sync.RWMutex{}
+
+var buffer = make(map[string]*Buff)
+
+type Buff struct {
+	mu   sync.Mutex
+	data []*sarama.ProducerMessage
+}
+
+func (b *Buff) Read() []*sarama.ProducerMessage {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	arr := b.data
+	b.data = make([]*sarama.ProducerMessage, 0)
+	return arr
+}
+
+func (b *Buff) Write(msg *sarama.ProducerMessage) {
+	b.mu.Lock()
+	b.data = append(b.data, msg)
+	b.mu.Unlock()
+}
 
 func AsyncPublish(topic string, value string) {
 	msg := &sarama.ProducerMessage{
@@ -78,26 +99,33 @@ func AsyncPublish(topic string, value string) {
 		Key:       sarama.StringEncoder("key"),
 		Value:     sarama.ByteEncoder(value),
 	}
-	mu.Lock()
-	buffer[topic] = append(buffer[topic], msg)
-	mu.Unlock()
+	lock.RLock()
+	buf, ok := buffer[topic]
+	lock.RUnlock()
+	if !ok {
+		buf = &Buff{
+			mu:   sync.Mutex{},
+			data: make([]*sarama.ProducerMessage, 0),
+		}
+		lock.Lock()
+		buffer[topic] = buf
+		lock.Unlock()
+	}
+	buf.Write(msg)
 }
 
-var mu = sync.Mutex{}
-
 func Tick() {
-	tick := time.Tick(time.Duration(100) * time.Millisecond)
+	tick := time.Tick(time.Duration(config.GetConfig().Kafka.ProducerTickerInterval) * time.Millisecond)
 	for {
 		select {
 		case <-tick:
-			mu.Lock()
 			if len(buffer) > 0 {
+				lock.RLock()
 				for _, v := range (buffer) {
-					BatchPublish(v)
+					BatchPublish(v.Read())
 				}
-				buffer = make(map[string][]*sarama.ProducerMessage)
+				lock.RUnlock()
 			}
-			mu.Unlock()
 		}
 	}
 }

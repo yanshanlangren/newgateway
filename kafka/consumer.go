@@ -48,8 +48,8 @@ func newConsumer() *Consumer {
 }
 
 func GetConsumer() *Consumer {
-	mu.Lock()
-	defer mu.Unlock()
+	consumerPool.mu.Lock()
+	defer consumerPool.mu.Unlock()
 	for k, v := range (consumerPool.isIdle) {
 		if v {
 			consumerPool.isIdle[k] = false
@@ -60,8 +60,8 @@ func GetConsumer() *Consumer {
 }
 
 func (c *Consumer) Release() {
-	mu.Lock()
-	defer mu.Unlock()
+	consumerPool.mu.Lock()
+	defer consumerPool.mu.Unlock()
 	for k, v := range (consumerPool.consumers) {
 		if v == c {
 			consumerPool.isIdle[k] = true
@@ -112,7 +112,7 @@ func (c *Consumer) NewSubscribers(tpc string, consumerBufferSize int) ([]*Subscr
 			wg.Add(1)
 			go func(tpc string) {
 				defer wg.Done()
-				logger.Debug(time.Now(),"start subscribing topic[" + tpc + "]")
+				logger.Debug(time.Now(), "start subscribing topic["+tpc+"]")
 				partitionList, err := (*c.consumer).Partitions(tpc)
 				if err != nil {
 					logger.Error(err)
@@ -135,14 +135,14 @@ func (c *Consumer) NewSubscribers(tpc string, consumerBufferSize int) ([]*Subscr
 
 					//添加到列表中
 					sub.PcList = append(sub.PcList, pc)
-					logger.Debug(time.Now(),"finished subscribing topic[" + tpc + "]")
+					logger.Debug(time.Now(), "finished subscribing topic["+tpc+"]")
 				}
 				subs = append(subs, sub)
 			}(topic)
 		}
 	}
-	logger.Debug(time.Now(),"wait group waiting")
+	logger.Debug(time.Now(), "wait group waiting")
 	wg.Wait()
-	logger.Debug(time.Now(),"wait group finished")
+	logger.Debug(time.Now(), "wait group finished")
 	return subs, nil
 }

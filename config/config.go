@@ -14,8 +14,9 @@ type Config struct {
 		BufferSize     int    `yaml:"buffer-size"`
 	}
 	Kafka struct {
-		ServerList       []string `yaml:"server-list"`
-		ConsumerPoolSize int      `yaml:"consumer-pool-size"`
+		ServerList             []string `yaml:"server-list"`
+		ConsumerPoolSize       int      `yaml:"consumer-pool-size"`
+		ProducerTickerInterval int      `yaml:"producer-ticker-interval"`
 	}
 	Log struct {
 		File struct {
