@@ -35,6 +35,10 @@ type Client struct {
 	AssureClosing chan bool
 	//kafka消费
 	Consumer *kafka.Consumer
+
+	Buffer        []byte
+	IsBufferEmpty bool
+	BufferOffset  int
 }
 
 // 关闭客户端连接
@@ -64,24 +68,12 @@ func (c *Client) Will(conn *model.MQTTMessage) {
 }
 
 //处理字节数组
-func (c *Client) Deal(arr []byte) {
-	//解析MQTT消息
-	reqArr := c.Parse(arr)
-	for _, reqMsg := range (reqArr) {
-		logger.Debug("message type: "+strconv.Itoa(reqMsg.FixedHeader.PackageType), " message body", arr)
-		//处理消息业务逻辑
-		if reqMsg.FixedHeader != nil {
-			resMsg := c.DealMQTTMessage(reqMsg)
-			if resMsg != nil {
-				go c.Write(resMsg)
-			}
-		}
-	}
-}
-
-func (c *Client) Parse(arr []byte) []*model.MQTTMessage {
-	return ParseByteArray(arr)
-}
+//func (c *Client) Deal(arr []byte) {
+//	//c.Parse(arr)
+//}
+//
+//func (c *Client) Parse(arr []byte) {
+//}
 
 func (c *Client) Write(msg *model.MQTTMessage) {
 	resByte := MQTT2ByteArr(msg)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"newgateway/config"
 	"newgateway/handler"
 	"newgateway/logger"
@@ -14,8 +16,10 @@ import (
 
 func main() {
 	//handler := handler.NewEchoHandler()
-	handler := &handler.MDMPHandler{
-	}
+	handler := &handler.MDMPHandler{}
+	go func() {
+		http.ListenAndServe("0.0.0.0:9090", nil)
+	}()
 	ListenAndServe(":"+config.GetConfig().Server.Port, handler)
 }
 func ListenAndServe(address string, handler handler.Handler) {
@@ -61,5 +65,6 @@ func ListenAndServe(address string, handler handler.Handler) {
 		// 开启新的 goroutine 处理该连接
 		logger.Info("accept link")
 		go handler.Handle(ctx, conn)
+		//handler.Handle(ctx, conn)
 	}
 }

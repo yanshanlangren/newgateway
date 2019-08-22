@@ -1,25 +1,55 @@
 package mqtt
 
 import (
+	"errors"
 	"newgateway/constant"
 	"newgateway/logger"
 	"newgateway/model"
+	"strconv"
 )
 
-var offset = 0
-
-var buffer = make([]byte, 1024*1024)
-var isBufferEmpty = true
-
-func ParseByteArray(byteArr []byte) []*model.MQTTMessage {
-	msgArr := make([]*model.MQTTMessage, 0)
-
+func (c *Client) DealByteArray(byteArr []byte) {
+	var offset = 0
 	//捕获可能异常
 	defer func() {
 		if err := recover(); err != nil {
-			logger.Error(err, len(byteArr), byteArr)
+			if offset > 0 {
+				logger.Warn("parse error, array length = ", len(byteArr), " offset = ", offset, " msg = ", string(byteArr))
+				copy(c.Buffer[c.BufferOffset:], byteArr[offset:])
+				c.BufferOffset += len(byteArr) - offset
+				c.IsBufferEmpty = false
+			} else {
+				logger.Warn("emergency error, array length = ", len(byteArr), " offset = ", offset, " msg(from offset) = ", string(byteArr[offset:]))
+				////试探下一个完整的数据节点
+				//for offset++; offset < len(byteArr); offset++ {
+				//	if msg, err := ParseByteArray(byteArr[offset:]); msg != nil && err == nil {
+				//		break
+				//	}
+				//}
+				//logger.Info("new pointer found, array length = ", len(byteArr), " offset = ", offset, " msg = ", string(byteArr[offset:]))
+				//c.DealByteArray(byteArr[offset:])
+
+				//丢掉出问题的数据
+				c.BufferOffset = 0
+				c.IsBufferEmpty = true
+			}
 		}
 	}()
+	if !c.IsBufferEmpty {
+		byteArr = appendArray(c.Buffer[:c.BufferOffset], byteArr)
+		c.BufferOffset = 0
+	}
+
+	//Parse(byteArr,&offset,func(msg *model.MQTTMessage){
+	//	//处理消息业务逻辑
+	//	if msg.FixedHeader != nil {
+	//		logger.Debug("message type: " + strconv.Itoa(msg.FixedHeader.PackageType))
+	//		resMsg := c.DealMQTTMessage(msg)
+	//		if resMsg != nil {
+	//			go c.Write(resMsg)
+	//		}
+	//	}
+	//})
 
 	for offset = 0; offset < len(byteArr); {
 		msg := &model.MQTTMessage{}
@@ -33,10 +63,70 @@ func ParseByteArray(byteArr []byte) []*model.MQTTMessage {
 		//解析消息体
 		msg.Payload = parsePayload(byteArr[2+varHeaderLen+offset:offset+msg.FixedHeader.RemainingLength+2], msg)
 
-		msgArr = append(msgArr, msg)
 		offset += msg.FixedHeader.RemainingLength + 2
+
+		logger.Debug("message type: " + strconv.Itoa(msg.FixedHeader.PackageType))
+		//处理消息业务逻辑
+		if msg.FixedHeader != nil {
+			resMsg := c.DealMQTTMessage(msg)
+			if resMsg != nil {
+				go c.Write(resMsg)
+			}
+		}
 	}
-	return msgArr
+	c.IsBufferEmpty = true
+}
+
+func Parse(byteArr []byte, offset *int, f func(msg *model.MQTTMessage)) {
+	for *offset = 0; *offset < len(byteArr); {
+		msg := &model.MQTTMessage{}
+		//解析固定头
+		msg.FixedHeader = parseFixedHeader(byteArr[:2])
+
+		//解析可变头
+		variableHeader, varHeaderLen := parseVariableHeader(byteArr[2:2+msg.FixedHeader.RemainingLength], msg)
+		msg.VariableHeader = variableHeader
+
+		//解析消息体
+		msg.Payload = parsePayload(byteArr[2+varHeaderLen:msg.FixedHeader.RemainingLength+2], msg)
+		*offset += msg.FixedHeader.RemainingLength + 2
+		f(msg)
+	}
+}
+
+func ParseByteArray(byteArr []byte) (*model.MQTTMessage, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			logger.Error(err)
+		}
+	}()
+
+	if len(byteArr) < 2 {
+		return nil, errors.New("invalid message")
+	}
+	//if int(byteArr[0])>>4 != 3 && int(byteArr[0])&15 > 0 {
+	//	return nil, errors.New("invalid message")
+	//}
+	msg := &model.MQTTMessage{}
+	//解析固定头
+	msg.FixedHeader = parseFixedHeader(byteArr[:2])
+
+	//解析可变头
+	if len(byteArr) < 2+msg.FixedHeader.RemainingLength {
+		return nil, errors.New("invalid message")
+	}
+	variableHeader, varHeaderLen := parseVariableHeader(byteArr[2:2+msg.FixedHeader.RemainingLength], msg)
+	msg.VariableHeader = variableHeader
+
+	//解析消息体
+	if len(byteArr) < 2+varHeaderLen {
+		return nil, errors.New("invalid message")
+	}
+	msg.Payload = parsePayload(byteArr[2+varHeaderLen:msg.FixedHeader.RemainingLength+2], msg)
+
+	logger.Debug("message type: " + strconv.Itoa(msg.FixedHeader.PackageType))
+	//处理消息业务逻辑
+	return msg, nil
 }
 
 //解析固定头

@@ -58,41 +58,46 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		Closing:       make(chan bool),
 		Closed:        false,
 		AssureClosing: make(chan bool),
+		Buffer:        make([]byte, 1024*1024),
+		IsBufferEmpty: true,
+		BufferOffset:  0,
 	}
 	go client.Tick()
 
 	//读
 	reader := bufio.NewReader(conn)
-	connBuffer := make([]byte, 16*1024)
-	connLen, err := reader.Read(connBuffer)
+
+	var (
+		buff    = make([]byte, bufferSize*1024)
+		n       = 0
+		err     error
+		connMsg *model.MQTTMessage
+	)
+	n, err = reader.Read(buff)
 	if err != nil {
 		logger.Error(err.Error())
 		return
 	}
-	connByteArr := connBuffer[:connLen]
-	connMsgArr := mqtt.ParseByteArray(connByteArr)
-	if connMsgArr == nil {
-		logger.Error("error parsing connection string: ", connByteArr)
+	connMsg, err = mqtt.ParseByteArray(buff[:n])
+	if err != nil {
+		logger.Error("error parsing connection string: ", buff[:n], err)
 		return
 	}
-	connMsg := connMsgArr[0]
-	logger.Debug("accept type: ", strconv.Itoa(connMsg.FixedHeader.PackageType), " accept message: ", connByteArr)
+	logger.Debug("accept type: ", strconv.Itoa(connMsg.FixedHeader.PackageType), " accept message: ", buff[:n])
 
 	//dealConnect
 	if connMsg.FixedHeader.PackageType == constant.MQTT_MSG_TYPE_CONNECT && h.dealConnect(connMsg, client) {
 		x := make(chan bool)
-		buff := make([]byte, bufferSize*1024)
+		dur := time.Duration(3*connMsg.VariableHeader.KeepAliveTimer/2) * time.Second
+		timeout := time.NewTimer(dur)
 		for {
 			//监听超时, 异步读取数据
-			var (
-				n   = 0
-				err error
-			)
 			go func() {
+				timeout.Reset(dur)
 				n, err = reader.Read(buff)
-				logger.Debug("received bytes of ", n, " ", buff[:n], err)
+				logger.Debug("received bytes of ", n, " ", err)
 				if n > 0 {
-					client.Deal(buff[:n])
+					client.DealByteArray(buff[:n])
 					x <- true
 					return
 				}
@@ -110,15 +115,18 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 			select {
 			case <-x: //正常收取消息
 				continue
-			case <-time.After(time.Duration(3*connMsg.VariableHeader.KeepAliveTimer/2) * time.Second): //超时
+			case <-timeout.C: //超时
 				logger.Warn("connection time out")
 				client.Will(connMsg)
 				h.activeConn.Delete(client)
+				timeout.Stop()
+				close(x)
 				client.Close()
 				return
 			case <-client.Closing: //客户端关闭
-				logger.Info("connection close")
 				h.activeConn.Delete(client)
+				timeout.Stop()
+				close(x)
 				client.Close()
 				return
 			}
