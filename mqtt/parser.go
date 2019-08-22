@@ -21,13 +21,13 @@ func (c *Client) DealByteArray(byteArr []byte) {
 			} else {
 				logger.Warn("emergency error, array length = ", len(byteArr), " offset = ", offset, " msg(from offset) = ", string(byteArr[offset:]))
 				////试探下一个完整的数据节点
-				//for offset++; offset < len(byteArr); offset++ {
-				//	if msg, err := ParseByteArray(byteArr[offset:]); msg != nil && err == nil {
-				//		break
-				//	}
-				//}
-				//logger.Info("new pointer found, array length = ", len(byteArr), " offset = ", offset, " msg = ", string(byteArr[offset:]))
-				//c.DealByteArray(byteArr[offset:])
+				for offset++; offset < len(byteArr); offset++ {
+					if msg, err := ParseByteArray(byteArr[offset:]); msg != nil && err == nil {
+						break
+					}
+				}
+				logger.Info("new pointer found, array length = ", len(byteArr), " offset = ", offset, " msg = ", string(byteArr[offset:]))
+				c.DealByteArray(byteArr[offset:])
 
 				//丢掉出问题的数据
 				c.BufferOffset = 0
@@ -104,9 +104,9 @@ func ParseByteArray(byteArr []byte) (*model.MQTTMessage, error) {
 	if len(byteArr) < 2 {
 		return nil, errors.New("invalid message")
 	}
-	//if int(byteArr[0])>>4 != 3 && int(byteArr[0])&15 > 0 {
-	//	return nil, errors.New("invalid message")
-	//}
+	if int(byteArr[0])>>4 != 3 && int(byteArr[0])&15 > 0 {
+		return nil, errors.New("invalid message")
+	}
 	msg := &model.MQTTMessage{}
 	//解析固定头
 	msg.FixedHeader = parseFixedHeader(byteArr[:2])

@@ -2,7 +2,7 @@ server:
   network: tcp
   port: 8000
   ticker-interval: 10
-  buffer-size: 1024
+  buffer-size: 128
 kafka:
   server-list:
 #    - 192.168.0.8:9092

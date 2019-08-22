@@ -93,7 +93,6 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		for {
 			//监听超时, 异步读取数据
 			go func() {
-				timeout.Reset(dur)
 				n, err = reader.Read(buff)
 				logger.Debug("received bytes of ", n, " ", err)
 				if n > 0 {
@@ -114,6 +113,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 			}()
 			select {
 			case <-x: //正常收取消息
+				timeout.Reset(dur)
 				continue
 			case <-timeout.C: //超时
 				logger.Warn("connection time out")
