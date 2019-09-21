@@ -22,7 +22,17 @@ func appendFixedHeader(msg *model.MQTTMessage, arr []byte) []byte {
 		//消息类型
 		arr = append(arr, byte(msg.FixedHeader.PackageType<<4))
 		//剩余长度
-		arr = append(arr, byte(msg.FixedHeader.RemainingLength))
+		x := msg.FixedHeader.RemainingLength
+		flag := true
+		for ; flag; {
+			flag = x/128 > 0
+			a := x % 128
+			if flag {
+				a += 128
+			}
+			arr = append(arr, byte(a))
+			x /= 128
+		}
 	}
 	return arr
 }

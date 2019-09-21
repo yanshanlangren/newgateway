@@ -5,6 +5,7 @@ import (
 	"newgateway/constant"
 	"newgateway/logger"
 	"newgateway/model"
+	"newgateway/utils"
 	"strconv"
 )
 
@@ -54,18 +55,19 @@ func (c *Client) DealByteArray(byteArr []byte) {
 	for offset = 0; offset < len(byteArr); {
 		msg := &model.MQTTMessage{}
 		//解析固定头
-		msg.FixedHeader = parseFixedHeader(byteArr[offset : offset+2])
+		fixedHeader, fixHeaderLen := parseFixedHeader(byteArr[offset:])
+		msg.FixedHeader = fixedHeader
 
 		//解析可变头
-		variableHeader, varHeaderLen := parseVariableHeader(byteArr[offset+2:offset+2+msg.FixedHeader.RemainingLength], msg)
+		variableHeader, varHeaderLen := parseVariableHeader(byteArr[offset+fixHeaderLen:offset+fixHeaderLen+msg.FixedHeader.RemainingLength], msg)
 		msg.VariableHeader = variableHeader
 
 		//解析消息体
-		msg.Payload = parsePayload(byteArr[2+varHeaderLen+offset:offset+msg.FixedHeader.RemainingLength+2], msg)
+		msg.Payload = parsePayload(byteArr[fixHeaderLen+varHeaderLen+offset:offset+msg.FixedHeader.RemainingLength+fixHeaderLen], msg)
 
-		offset += msg.FixedHeader.RemainingLength + 2
+		logger.Debug("receive message type: "+strconv.Itoa(msg.FixedHeader.PackageType)+", body: ", string(byteArr[0:msg.FixedHeader.RemainingLength+fixHeaderLen]))
 
-		logger.Debug("message type: " + strconv.Itoa(msg.FixedHeader.PackageType))
+		offset += msg.FixedHeader.RemainingLength + fixHeaderLen
 		//处理消息业务逻辑
 		if msg.FixedHeader != nil {
 			resMsg := c.DealMQTTMessage(msg)
@@ -81,15 +83,16 @@ func Parse(byteArr []byte, offset *int, f func(msg *model.MQTTMessage)) {
 	for *offset = 0; *offset < len(byteArr); {
 		msg := &model.MQTTMessage{}
 		//解析固定头
-		msg.FixedHeader = parseFixedHeader(byteArr[:2])
+		fixedHeader, fixHeaderLen := parseFixedHeader(byteArr[:])
+		msg.FixedHeader = fixedHeader
 
 		//解析可变头
-		variableHeader, varHeaderLen := parseVariableHeader(byteArr[2:2+msg.FixedHeader.RemainingLength], msg)
+		variableHeader, varHeaderLen := parseVariableHeader(byteArr[fixHeaderLen:fixHeaderLen+msg.FixedHeader.RemainingLength], msg)
 		msg.VariableHeader = variableHeader
 
 		//解析消息体
-		msg.Payload = parsePayload(byteArr[2+varHeaderLen:msg.FixedHeader.RemainingLength+2], msg)
-		*offset += msg.FixedHeader.RemainingLength + 2
+		msg.Payload = parsePayload(byteArr[fixHeaderLen+varHeaderLen:msg.FixedHeader.RemainingLength+fixHeaderLen], msg)
+		*offset += msg.FixedHeader.RemainingLength + fixHeaderLen
 		f(msg)
 	}
 }
@@ -100,29 +103,23 @@ func ParseByteArray(byteArr []byte) (*model.MQTTMessage, error) {
 			logger.Error(err)
 		}
 	}()
-
-	if len(byteArr) < 2 {
-		return nil, errors.New("invalid message")
-	}
-	if int(byteArr[0])>>4 != 3 && int(byteArr[0])&15 > 0 {
-		return nil, errors.New("invalid message")
-	}
 	msg := &model.MQTTMessage{}
 	//解析固定头
-	msg.FixedHeader = parseFixedHeader(byteArr[:2])
+	fixedHeader, fixHeaderLen := parseFixedHeader(byteArr[:])
+	msg.FixedHeader = fixedHeader
 
 	//解析可变头
-	if len(byteArr) < 2+msg.FixedHeader.RemainingLength {
+	if len(byteArr) < fixHeaderLen+msg.FixedHeader.RemainingLength {
 		return nil, errors.New("invalid message")
 	}
-	variableHeader, varHeaderLen := parseVariableHeader(byteArr[2:2+msg.FixedHeader.RemainingLength], msg)
+	variableHeader, varHeaderLen := parseVariableHeader(byteArr[fixHeaderLen:fixHeaderLen+msg.FixedHeader.RemainingLength], msg)
 	msg.VariableHeader = variableHeader
 
 	//解析消息体
-	if len(byteArr) < 2+varHeaderLen {
+	if len(byteArr) < fixHeaderLen+varHeaderLen {
 		return nil, errors.New("invalid message")
 	}
-	msg.Payload = parsePayload(byteArr[2+varHeaderLen:msg.FixedHeader.RemainingLength+2], msg)
+	msg.Payload = parsePayload(byteArr[fixHeaderLen+varHeaderLen:msg.FixedHeader.RemainingLength+fixHeaderLen], msg)
 
 	logger.Debug("message type: " + strconv.Itoa(msg.FixedHeader.PackageType))
 	//处理消息业务逻辑
@@ -130,10 +127,9 @@ func ParseByteArray(byteArr []byte) (*model.MQTTMessage, error) {
 }
 
 //解析固定头
-func parseFixedHeader(input []byte) *model.FixedHeader {
+func parseFixedHeader(input []byte) (*model.FixedHeader, int) {
 	header := &model.FixedHeader{
-		PackageType:     int(input[0]) >> 4,
-		RemainingLength: int(input[1]),
+		PackageType: int(input[0]) >> 4,
 	}
 	if header.PackageType == constant.MQTT_MSG_TYPE_PUBLISH {
 		tokenInt := int(input[0]) & 15
@@ -146,7 +142,15 @@ func parseFixedHeader(input []byte) *model.FixedHeader {
 		token.DUP = tokenInt % 2
 		header.SpecificToken = token
 	}
-	return header
+	flag := int(input[1]) >> 7
+	header.RemainingLength = int(input[1] & 127)
+	var i int
+	for i = 2; flag == 1; i++ {
+		header.RemainingLength += int(input[i]&127) * utils.Pow(128, (i - 1))
+		flag = int(input[i]) >> 7
+	}
+
+	return header, i
 }
 
 //解析可变头
@@ -188,7 +192,7 @@ func parseConnectVariableHeader(body []byte) (*model.VariableHeader, int) {
 //处理publish消息的可变头
 func parsePublishVariableHeader(body []byte, msg *model.MQTTMessage) (*model.VariableHeader, int) {
 	header := &model.VariableHeader{}
-	topicLen := int(body[1])
+	topicLen := int(body[0])<<8 + int(body[1])
 	header.TopicName = string(body[2 : 2+topicLen])
 	offset := 2 + topicLen
 	if msg.FixedHeader.SpecificToken.Qos > 0 {

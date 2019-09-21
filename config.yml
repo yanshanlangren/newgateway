@@ -5,8 +5,8 @@ server:
   buffer-size: 128
 kafka:
   server-list:
-#    - 192.168.0.8:9092
-    - localhost:9092
+    - 192.168.0.8:9092
+#    - localhost:9092
   consumer-pool-size: 0
   producer-ticker-interval: 100
 log:
@@ -14,4 +14,4 @@ log:
     path: E:\\log
     max_hour: 24
     rotate_hour: 24
-  level: INFO
+  level: DEBUG

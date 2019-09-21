@@ -78,7 +78,7 @@ func (c *Client) Will(conn *model.MQTTMessage) {
 func (c *Client) Write(msg *model.MQTTMessage) {
 	resByte := MQTT2ByteArr(msg)
 	if resByte != nil && len(resByte) > 0 {
-		logger.Debug("return type: ", strconv.Itoa(msg.FixedHeader.PackageType), " return message: ", resByte)
+		logger.Debug("return type: ", strconv.Itoa(msg.FixedHeader.PackageType), " return message: ", string(resByte))
 		// 发送数据前先置为waiting状态
 		c.Waiting.Add(1)
 		//写返回
@@ -266,7 +266,7 @@ func (cli *Client) dealUnsubscribe(msg *model.MQTTMessage) *model.MQTTMessage {
 	for _, topic := range (strings.Split(msg.Payload.UnsubscribeTopics, ",")) {
 		cli.SubscribeMap.Range(func(key, val interface{}) bool {
 			if match, err := regexp.Match(topic, []byte(key.(string))); err == nil && match {
-				logger.Debug(time.Now(), "unsubscribing topic["+key.(string)+"]")
+				logger.Debug(time.Now(), " unsubscribing topic["+key.(string)+"]")
 				go cli.Unsubscribe(key.(string))
 			}
 			return true

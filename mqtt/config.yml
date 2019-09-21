@@ -1,0 +1,17 @@
+server:
+  network: tcp
+  port: 8000
+  ticker-interval: 10
+  buffer-size: 128
+kafka:
+  server-list:
+    - 192.168.0.8:9092
+#    - localhost:9092
+  consumer-pool-size: 0
+  producer-ticker-interval: 100
+log:
+  file:
+    path: E:\\log
+    max_hour: 24
+    rotate_hour: 24
+  level: DEBUG

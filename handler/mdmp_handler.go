@@ -83,7 +83,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 		logger.Error("error parsing connection string: ", buff[:n], err)
 		return
 	}
-	logger.Debug("accept type: ", strconv.Itoa(connMsg.FixedHeader.PackageType), " accept message: ", buff[:n])
+	logger.Debug("accept type: ", strconv.Itoa(connMsg.FixedHeader.PackageType), " accept message: ", string(buff[:n]))
 
 	//dealConnect
 	if connMsg.FixedHeader.PackageType == constant.MQTT_MSG_TYPE_CONNECT && h.dealConnect(connMsg, client) {
@@ -94,7 +94,7 @@ func (h *MDMPHandler) Handle(ctx context.Context, conn net.Conn) {
 			//监听超时, 异步读取数据
 			go func() {
 				n, err = reader.Read(buff)
-				logger.Debug("received bytes of ", n, " ", err)
+				logger.Debug("received bytes of ", n, " ", string(buff[:n]), " ", err)
 				if n > 0 {
 					client.DealByteArray(buff[:n])
 					x <- true
